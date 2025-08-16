@@ -1,0 +1,9 @@
+{
+    "type": "module",
+    "dependencies": {
+        "grammy": "^1.38.1"
+    },
+    "devDependencies": {
+        "prettier": "^3.6.2"
+    }
+}
