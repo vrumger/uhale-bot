@@ -148,7 +148,7 @@ export class Uhale {
         });
     }
 
-    async _getPresignedUrl({ isImage, fileSize, terminalId }) {
+    async getPresignedUrl({ isImage, fileSize, terminalId }) {
         if (!this.sessionId) {
             throw new Error('no session id');
         }
@@ -169,13 +169,7 @@ export class Uhale {
         return this._handleResponse(response);
     }
 
-    async _saveUploadedFile({
-        fileUrl,
-        fileId,
-        subject,
-        fileSize,
-        terminalId,
-    }) {
+    async saveUploadedFile({ fileUrl, fileId, subject, fileSize, terminalId }) {
         if (!this.sessionId) {
             throw new Error('no session id');
         }
@@ -227,7 +221,7 @@ export class Uhale {
         ]);
     }
 
-    _waitForFilesUploaded(fileIds, maxAttempts = Infinity) {
+    waitForFilesUploaded(fileIds, maxAttempts = Infinity) {
         return new Promise((resolve, reject) => {
             let attempts = 0;
 
@@ -266,7 +260,7 @@ export class Uhale {
 
         fileSize = fileSize ?? file.length;
 
-        const { awsUploadUrl, fileUrl, fileId } = await this._getPresignedUrl({
+        const { awsUploadUrl, fileUrl, fileId } = await this.getPresignedUrl({
             isImage,
             fileSize,
             terminalId,
@@ -277,7 +271,7 @@ export class Uhale {
             body: file,
         });
 
-        await this._saveUploadedFile({
+        await this.saveUploadedFile({
             fileUrl,
             fileId,
             fileSize,
@@ -285,7 +279,7 @@ export class Uhale {
             terminalId,
         });
 
-        await this._waitForFilesUploaded([fileId]);
+        await this.waitForFilesUploaded([fileId]);
 
         return fileId;
     }
@@ -335,7 +329,7 @@ export class Uhale {
         ]);
     }
 
-    _waitForFilesRevoked(fileIds, maxAttempts = Infinity) {
+    waitForFilesRevoked(fileIds, maxAttempts = Infinity) {
         return new Promise((resolve, reject) => {
             let attempts = 0;
 

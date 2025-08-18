@@ -36,12 +36,20 @@ bot.command('start', async ctx => {
     await ctx.reply('terminals:\n' + terminals.join('\n'));
 });
 
-bot.on([':photo', ':video'], async ctx => {
-    const isImage = Boolean(ctx.msg.photo);
+bot.on([':photo', ':video', ':document'], async ctx => {
+    if (ctx.msg.document && !ctx.msg.document.mime_type.startsWith('image/')) {
+        return;
+    }
+
+    const isImage = Boolean(
+        ctx.msg.photo ||
+            (ctx.msg.document &&
+                ctx.msg.document.mime_type.startsWith('image/')),
+    );
     const fileTypeLabel = isImage ? 'image' : 'video';
 
     const { message_id: messageId } = await ctx.reply(
-        `uploading ${fileTypeLabel}...`,
+        `uploading ${fileTypeLabel}…`,
         {
             reply_parameters: {
                 message_id: ctx.msg.message_id,
@@ -50,6 +58,11 @@ bot.on([':photo', ':video'], async ctx => {
         },
     );
 
+    const editMessage = (text, other) =>
+        ctx.api
+            .editMessageText(ctx.chat.id, messageId, text, other)
+            .catch(console.error);
+
     const { file_size: fileSize, file_path: filePath } = await ctx.getFile();
 
     const request = await fetch(
@@ -57,18 +70,32 @@ bot.on([':photo', ':video'], async ctx => {
     );
     const response = await request.arrayBuffer();
 
-    const [{ terminalId }] = await getTerminals();
-    const fileId = await uhale.uploadFile({
+    const [{ terminalId, name: terminalName }] = await getTerminals();
+    const { awsUploadUrl, fileUrl, fileId } = await uhale.getPresignedUrl({
         isImage,
-        file: response,
         fileSize,
         terminalId,
     });
 
-    await ctx.api.editMessageText(
-        ctx.chat.id,
-        messageId,
-        `${fileTypeLabel} uploaded`,
+    await fetch(awsUploadUrl, {
+        method: 'PUT',
+        body: response,
+    });
+
+    await editMessage(`${fileTypeLabel} uploaded. saving to ${terminalName}…`);
+
+    await uhale.saveUploadedFile({
+        fileUrl,
+        fileId,
+        fileSize,
+        subject: isImage ? 'image.jpg' : 'video.mp4',
+        terminalId,
+    });
+
+    await uhale.waitForFilesUploaded([fileId]);
+
+    await editMessage(
+        `${fileTypeLabel} uploaded and saved to ${terminalName}.`,
         {
             reply_markup: new InlineKeyboard().text(
                 'Revoke',
@@ -82,10 +109,10 @@ bot.callbackQuery(/^r:(i|v):(\w+):(\w+)$/, async ctx => {
     const [, _fileType, terminalId, fileId] = ctx.match;
     const fileType = _fileType === 'i' ? 'image' : 'video';
 
-    await ctx.answerCallbackQuery(`revoking ${fileType}...`);
+    await ctx.answerCallbackQuery(`revoking ${fileType}…`);
 
     await uhale.revokeFiles(terminalId, [fileId]);
-    await uhale._waitForFilesRevoked([fileId]);
+    await uhale.waitForFilesRevoked([fileId]);
 
     await ctx.editMessageText(`${fileType} revoked`);
 });
