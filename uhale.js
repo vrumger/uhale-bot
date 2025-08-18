@@ -44,7 +44,7 @@ export class Uhale {
         this.sessionId = data;
     }
 
-    async _getSessionIdState() {
+    async getSessionIdState() {
         if (!this.sessionId) {
             throw new Error('no session id');
         }
@@ -122,7 +122,7 @@ export class Uhale {
                 try {
                     attempts++;
 
-                    const sessionIdState = await this._getSessionIdState();
+                    const sessionIdState = await this.getSessionIdState();
 
                     if (sessionIdState === 'loggedIn') {
                         clearInterval(interval);

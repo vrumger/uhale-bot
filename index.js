@@ -5,6 +5,11 @@ import { Uhale } from './uhale.js';
 const bot = new Bot(config.botToken);
 const uhale = new Uhale();
 
+const signIn = () =>
+    uhale
+        .login(config.email, config.password)
+        .then(() => uhale.waitForLoggedIn());
+
 let terminals;
 const getTerminals = async () => {
     if (terminals) {
@@ -70,6 +75,11 @@ bot.on([':photo', ':video', ':document'], async ctx => {
     );
     const response = await request.arrayBuffer();
 
+    const sessionIdState = await uhale.getSessionIdState();
+    if (sessionIdState !== 'loggedIn') {
+        await signIn();
+    }
+
     const [{ terminalId, name: terminalName }] = await getTerminals();
     const { awsUploadUrl, fileUrl, fileId } = await uhale.getPresignedUrl({
         isImage,
@@ -111,15 +121,18 @@ bot.callbackQuery(/^r:(i|v):(\w+):(\w+)$/, async ctx => {
 
     await ctx.answerCallbackQuery(`revoking ${fileType}…`);
 
+    const sessionIdState = await uhale.getSessionIdState();
+    if (sessionIdState !== 'loggedIn') {
+        await signIn();
+    }
+
     await uhale.revokeFiles(terminalId, [fileId]);
     await uhale.waitForFilesRevoked([fileId]);
 
     await ctx.editMessageText(`${fileType} revoked`);
 });
 
-uhale
-    .login(config.email, config.password)
-    .then(() => uhale.waitForLoggedIn())
+signIn()
     .then(() => console.log('logged in'))
     .then(() =>
         bot.start({
