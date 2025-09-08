@@ -89,6 +89,7 @@ bot.on([':photo', ':video', ':document'], async ctx => {
 
     await fetch(awsUploadUrl, {
         method: 'PUT',
+        headers: { 'Content-Type': 'multipart/form-data' },
         body: response,
     });
 
