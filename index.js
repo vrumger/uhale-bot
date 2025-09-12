@@ -49,7 +49,12 @@ bot.command('start', async ctx => {
 });
 
 bot.on([':photo', ':video', ':document'], async ctx => {
-    if (ctx.msg.document && !ctx.msg.document.mime_type.startsWith('image/')) {
+    if (
+        ctx.msg.document &&
+        !ctx.msg.document.mime_type.startsWith('image/') &&
+        !ctx.msg.document.mime_type.startsWith('video/')
+    ) {
+        console.log(ctx.msg.document);
         return;
     }
 
