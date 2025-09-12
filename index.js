@@ -21,7 +21,9 @@ const getTerminals = async () => {
         return terminals;
     }
 
-    terminals = await uhale.getTerminals();
+    terminals = (await uhale.getTerminals()).sort((a, b) =>
+        a.deviceId.localeCompare(b.deviceId),
+    );
     terminalFetchDate = Date.now();
 
     return terminals;
