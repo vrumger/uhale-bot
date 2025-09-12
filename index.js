@@ -104,9 +104,17 @@ bot.callbackQuery(/^f:(\d+)$/, async ctx => {
         replyMessage.video ??
         replyMessage.document;
 
-    const { file_size: fileSize, file_path: filePath } = await ctx.api.getFile(
-        file.file_id,
-    );
+    let fileSize, filePath;
+    try {
+        ({ file_size: fileSize, file_path: filePath } = await ctx.api.getFile(
+            file.file_id,
+        ));
+    } catch (error) {
+        await editMessage(error.message || 'there was an error', {
+            reply_markup: new InlineKeyboard().text('Retry', ctx.match[0]),
+        });
+        return;
+    }
 
     const request = await fetch(
         `https://api.telegram.org/file/bot${bot.token}/${filePath}`,
