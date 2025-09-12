@@ -131,7 +131,7 @@ bot.callbackQuery(/^f:(\d+)$/, async ctx => {
         fileUrl,
         fileId,
         fileSize,
-        subject: isImage ? 'image.jpg' : 'video.mp4',
+        subject: replyMessage.text,
         terminalId,
     });
 
