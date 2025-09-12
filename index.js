@@ -11,12 +11,19 @@ const signIn = () =>
         .then(() => uhale.waitForLoggedIn());
 
 let terminals;
+let terminalFetchDate;
+/**
+ * @returns {Record<string, string>[]}
+ */
 const getTerminals = async () => {
-    if (terminals) {
+    // 30 minutes
+    if (terminals && Date.now() < terminalFetchDate + 1_800_000) {
         return terminals;
     }
 
     terminals = await uhale.getTerminals();
+    terminalFetchDate = Date.now();
+
     return terminals;
 };
 
@@ -46,29 +53,55 @@ bot.on([':photo', ':video', ':document'], async ctx => {
         return;
     }
 
+    const terminals = await getTerminals();
+    const keyboard = new InlineKeyboard();
+
+    terminals.forEach(terminal => {
+        keyboard
+            .text(
+                `${terminal.name}${
+                    terminal.state !== '1' || terminal.bindState !== '1'
+                        ? ' (offline)'
+                        : ''
+                }`,
+                `f:${terminal.terminalId}`,
+            )
+            .row();
+    });
+
+    await ctx.reply('pick a frame', {
+        reply_parameters: {
+            message_id: ctx.msg.message_id,
+        },
+        reply_markup: keyboard,
+    });
+});
+
+bot.callbackQuery(/^f:(\d+)$/, async ctx => {
+    const terminals = await getTerminals();
+    const { terminalId, name: terminalName } = terminals.find(
+        terminal => terminal.terminalId === ctx.match[1],
+    );
+
+    const replyMessage = ctx.msg.reply_to_message;
+
     const isImage = Boolean(
-        ctx.msg.photo ||
-            (ctx.msg.document &&
-                ctx.msg.document.mime_type.startsWith('image/')),
+        replyMessage.photo ||
+            (replyMessage.document &&
+                replyMessage.document.mime_type.startsWith('image/')),
     );
     const fileTypeLabel = isImage ? 'image' : 'video';
 
-    const { message_id: messageId } = await ctx.reply(
-        `uploading ${fileTypeLabel}…`,
-        {
-            reply_parameters: {
-                message_id: ctx.msg.message_id,
-                allow_sending_without_reply: true,
-            },
-        },
-    );
-
     const editMessage = (text, other) =>
         ctx.api
-            .editMessageText(ctx.chat.id, messageId, text, other)
+            .editMessageText(ctx.chat.id, ctx.msg.message_id, text, other)
             .catch(console.error);
 
-    const { file_size: fileSize, file_path: filePath } = await ctx.getFile();
+    await editMessage(`uploading ${fileTypeLabel}…`);
+
+    const { file_size: fileSize, file_path: filePath } = await ctx.api.getFile(
+        replyMessage.photo.at(-1).file_id,
+    );
 
     const request = await fetch(
         `https://api.telegram.org/file/bot${bot.token}/${filePath}`,
@@ -80,7 +113,6 @@ bot.on([':photo', ':video', ':document'], async ctx => {
         await signIn();
     }
 
-    const [{ terminalId, name: terminalName }] = await getTerminals();
     const { awsUploadUrl, fileUrl, fileId } = await uhale.getPresignedUrl({
         isImage,
         fileSize,
