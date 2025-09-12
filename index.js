@@ -99,8 +99,13 @@ bot.callbackQuery(/^f:(\d+)$/, async ctx => {
 
     await editMessage(`uploading ${fileTypeLabel}…`);
 
+    const file =
+        replyMessage.photo?.at(-1) ??
+        replyMessage.video ??
+        replyMessage.document;
+
     const { file_size: fileSize, file_path: filePath } = await ctx.api.getFile(
-        replyMessage.photo.at(-1).file_id,
+        file.file_id,
     );
 
     const request = await fetch(
