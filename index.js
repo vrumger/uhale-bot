@@ -161,17 +161,15 @@ bot.on([':photo', ':video', ':document'], async ctx => {
                         )
                         .catch(console.error);
                 } else {
-                    responseMessage = await ctx.api.sendMessage(
-                        ctx.chat.id,
-                        text,
-                        {
+                    responseMessage = await ctx.api
+                        .sendMessage(ctx.chat.id, text, {
                             ...other,
                             reply_parameters: {
                                 ...other?.reply_parameters,
                                 message_id: ctx.msg.message_id,
                             },
-                        },
-                    );
+                        })
+                        .catch(console.error);
                 }
             };
 
