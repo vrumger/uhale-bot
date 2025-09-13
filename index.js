@@ -50,17 +50,136 @@ bot.command('start', async ctx => {
     await ctx.reply('terminals:\n' + terminals.join('\n'));
 });
 
+/**
+ * @param {Record<string, string>} terminal
+ * @param {import('grammy/types').Message} msg
+ * @returns
+ */
+const uploadFile = async (terminal, msg, editMessage) => {
+    const isImage = Boolean(
+        msg.photo ||
+            (msg.document && msg.document.mime_type.startsWith('image/')),
+    );
+    const fileTypeLabel = isImage ? 'image' : 'video';
+
+    await editMessage(`uploading ${fileTypeLabel}…`);
+
+    const file = msg.photo?.at(-1) ?? msg.video ?? msg.document;
+
+    let fileSize, filePath;
+    try {
+        ({ file_size: fileSize, file_path: filePath } = await bot.api.getFile(
+            file.file_id,
+        ));
+    } catch (error) {
+        await editMessage(error.message || 'there was an error', {
+            reply_markup: new InlineKeyboard().text(
+                'Retry',
+                `f:${terminal.terminalId}`,
+            ),
+        });
+        return;
+    }
+
+    const request = await fetch(
+        `https://api.telegram.org/file/bot${bot.token}/${filePath}`,
+    );
+    const response = await request.arrayBuffer();
+
+    const sessionIdState = await uhale.getSessionIdState();
+    if (sessionIdState !== 'loggedIn') {
+        await signIn();
+    }
+
+    const { awsUploadUrl, fileUrl, fileId } = await uhale.getPresignedUrl({
+        isImage,
+        fileSize,
+        terminalId: terminal.terminalId,
+    });
+
+    await fetch(awsUploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: response,
+    });
+
+    await editMessage(`${fileTypeLabel} uploaded. saving to ${terminal.name}…`);
+
+    await uhale.saveUploadedFile({
+        fileUrl,
+        fileId,
+        fileSize,
+        subject: msg.text,
+        terminalId: terminal.terminalId,
+    });
+
+    await uhale.waitForFilesUploaded([fileId]);
+
+    await editMessage(
+        `${fileTypeLabel} uploaded and saved to ${terminal.name}.`,
+        {
+            reply_markup: new InlineKeyboard().text(
+                'Revoke',
+                `r:${isImage ? 'i' : 'v'}:${terminal.terminalId}:${fileId}`,
+            ),
+        },
+    );
+};
+
 bot.on([':photo', ':video', ':document'], async ctx => {
     if (
         ctx.msg.document &&
         !ctx.msg.document.mime_type.startsWith('image/') &&
         !ctx.msg.document.mime_type.startsWith('video/')
     ) {
-        console.log(ctx.msg.document);
         return;
     }
 
     const terminals = await getTerminals();
+
+    if (ctx.msg.reply_to_message?.forum_topic_created) {
+        const terminal = terminals.find(
+            terminal =>
+                terminal.name ===
+                ctx.msg.reply_to_message.forum_topic_created.name,
+        );
+
+        if (terminal) {
+            /**
+             * @type {import('grammy/types').Message | undefined}
+             */
+            let responseMessage;
+
+            const editMessage = async (text, other) => {
+                if (responseMessage) {
+                    await ctx.api
+                        .editMessageText(
+                            ctx.chat.id,
+                            responseMessage.message_id,
+                            text,
+                            other,
+                        )
+                        .catch(console.error);
+                } else {
+                    responseMessage = await ctx.api.sendMessage(
+                        ctx.chat.id,
+                        text,
+                        {
+                            ...other,
+                            reply_parameters: {
+                                ...other?.reply_parameters,
+                                message_id: ctx.msg.message_id,
+                            },
+                        },
+                    );
+                }
+            };
+
+            await uploadFile(terminal, ctx.msg, editMessage);
+            return;
+        }
+    }
+
     const keyboard = new InlineKeyboard();
 
     terminals.forEach(terminal => {
@@ -86,86 +205,17 @@ bot.on([':photo', ':video', ':document'], async ctx => {
 
 bot.callbackQuery(/^f:(\d+)$/, async ctx => {
     const terminals = await getTerminals();
-    const { terminalId, name: terminalName } = terminals.find(
+    const terminal = terminals.find(
         terminal => terminal.terminalId === ctx.match[1],
     );
-
-    const replyMessage = ctx.msg.reply_to_message;
-
-    const isImage = Boolean(
-        replyMessage.photo ||
-            (replyMessage.document &&
-                replyMessage.document.mime_type.startsWith('image/')),
-    );
-    const fileTypeLabel = isImage ? 'image' : 'video';
 
     const editMessage = (text, other) =>
         ctx.api
             .editMessageText(ctx.chat.id, ctx.msg.message_id, text, other)
             .catch(console.error);
 
-    await editMessage(`uploading ${fileTypeLabel}…`);
-
-    const file =
-        replyMessage.photo?.at(-1) ??
-        replyMessage.video ??
-        replyMessage.document;
-
-    let fileSize, filePath;
-    try {
-        ({ file_size: fileSize, file_path: filePath } = await ctx.api.getFile(
-            file.file_id,
-        ));
-    } catch (error) {
-        await editMessage(error.message || 'there was an error', {
-            reply_markup: new InlineKeyboard().text('Retry', ctx.match[0]),
-        });
-        return;
-    }
-
-    const request = await fetch(
-        `https://api.telegram.org/file/bot${bot.token}/${filePath}`,
-    );
-    const response = await request.arrayBuffer();
-
-    const sessionIdState = await uhale.getSessionIdState();
-    if (sessionIdState !== 'loggedIn') {
-        await signIn();
-    }
-
-    const { awsUploadUrl, fileUrl, fileId } = await uhale.getPresignedUrl({
-        isImage,
-        fileSize,
-        terminalId,
-    });
-
-    await fetch(awsUploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'multipart/form-data' },
-        body: response,
-    });
-
-    await editMessage(`${fileTypeLabel} uploaded. saving to ${terminalName}…`);
-
-    await uhale.saveUploadedFile({
-        fileUrl,
-        fileId,
-        fileSize,
-        subject: replyMessage.text,
-        terminalId,
-    });
-
-    await uhale.waitForFilesUploaded([fileId]);
-
-    await editMessage(
-        `${fileTypeLabel} uploaded and saved to ${terminalName}.`,
-        {
-            reply_markup: new InlineKeyboard().text(
-                'Revoke',
-                `r:${isImage ? 'i' : 'v'}:${terminalId}:${fileId}`,
-            ),
-        },
-    );
+    await ctx.answerCallbackQuery();
+    await uploadFile(terminal, ctx.msg.reply_to_message, editMessage);
 });
 
 bot.callbackQuery(/^r:(i|v):(\w+):(\w+)$/, async ctx => {
