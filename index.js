@@ -135,7 +135,17 @@ bot.on([':photo', ':video', ':document'], async ctx => {
         return;
     }
 
-    const terminals = await getTerminals();
+    let terminals;
+    try {
+        terminals = await getTerminals();
+    } catch (error) {
+        if (error.message === '600104: sessionId is invalid') {
+            await signIn();
+            terminals = await getTerminals();
+        } else {
+            throw error;
+        }
+    }
 
     if (ctx.msg.reply_to_message?.forum_topic_created) {
         const terminal = terminals.find(
@@ -173,7 +183,18 @@ bot.on([':photo', ':video', ':document'], async ctx => {
                 }
             };
 
-            await uploadFile(terminal, ctx.msg, editMessage);
+            try {
+                await uploadFile(terminal, ctx.msg, editMessage);
+            } catch (error) {
+                console.error(error);
+                await editMessage(error.message || 'there was an error', {
+                    reply_markup: new InlineKeyboard().text(
+                        'Retry',
+                        `f:${terminal.terminalId}`,
+                    ),
+                });
+            }
+
             return;
         }
     }
