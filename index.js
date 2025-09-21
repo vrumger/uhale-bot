@@ -1,6 +1,6 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { Uhale } from 'uhale';
-import { UhaleSessionIdState } from 'uhale/lib/types';
+import { UhaleSessionIdState } from 'uhale/lib/types.js';
 import config from './config.json' with { type: 'json' };
 
 const bot = new Bot(config.botToken);
