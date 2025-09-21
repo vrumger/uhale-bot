@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
+import { Uhale } from 'uhale';
+import { UhaleSessionIdState } from 'uhale/lib/types';
 import config from './config.json' with { type: 'json' };
-import { Uhale } from './uhale.js';
 
 const bot = new Bot(config.botToken);
 const uhale = new Uhale();
@@ -10,11 +11,11 @@ const signIn = () =>
         .login(config.email, config.password)
         .then(() => uhale.waitForLoggedIn());
 
+/**
+ * @type {import('uhale/lib/types').UhaleTerminal[]}
+ */
 let terminals;
 let terminalFetchDate;
-/**
- * @returns {Record<string, string>[]}
- */
 const getTerminals = async () => {
     // 30 minutes
     if (terminals && Date.now() < terminalFetchDate + 1_800_000) {
@@ -87,7 +88,7 @@ const uploadFile = async (terminal, msg, editMessage) => {
     const response = await request.arrayBuffer();
 
     const sessionIdState = await uhale.getSessionIdState();
-    if (sessionIdState !== 'loggedIn') {
+    if (sessionIdState !== UhaleSessionIdState.LoggedIn) {
         await signIn();
     }
 
@@ -244,7 +245,7 @@ bot.callbackQuery(/^r:(i|v):(\w+):(\w+)$/, async ctx => {
     await ctx.answerCallbackQuery(`revoking ${fileType}…`);
 
     const sessionIdState = await uhale.getSessionIdState();
-    if (sessionIdState !== 'loggedIn') {
+    if (sessionIdState !== UhaleSessionIdState.LoggedIn) {
         await signIn();
     }
 
